@@ -61,10 +61,18 @@ async function mondayGraphQL(query: string, variables?: Record<string, unknown>)
   return json.data;
 }
 
+const cache = new Map<string, { timestamp: number; data: MondayItem[] }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Fetch all items from a board (handles pagination up to 500 items)
+ * Fetch all items from a board (handles pagination up to 500 items, cached for 5 min)
  */
 async function fetchBoardItems(boardId: string): Promise<MondayItem[]> {
+  const cached = cache.get(boardId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const query = `
     query GetBoardItems($boardId: ID!, $cursor: String) {
       boards(ids: [$boardId]) {
@@ -112,6 +120,7 @@ async function fetchBoardItems(boardId: string): Promise<MondayItem[]> {
     cursor = board.items_page.cursor;
   } while (cursor);
 
+  cache.set(boardId, { timestamp: Date.now(), data: allItems });
   return allItems;
 }
 
