@@ -122,11 +122,13 @@ ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}
   }
 
   if (data.workOrders) {
-    parts.push(`\n## WORK ORDERS DATA (${data.workOrders.length} records)\n\`\`\`json\n${JSON.stringify(data.workOrders.slice(0, 200), null, 2)}\n\`\`\``);
+    const compactWO = data.workOrders.map(({ _raw, ...rest }) => rest);
+    parts.push(`\n## WORK ORDERS DATA (${compactWO.length} records)\n\`\`\`json\n${JSON.stringify(compactWO)}\n\`\`\``);
   }
 
   if (data.deals) {
-    parts.push(`\n## DEALS / PIPELINE DATA (${data.deals.length} records)\n\`\`\`json\n${JSON.stringify(data.deals.slice(0, 200), null, 2)}\n\`\`\``);
+    const compactDeals = data.deals.map(({ _raw, ...rest }) => rest);
+    parts.push(`\n## DEALS / PIPELINE DATA (${compactDeals.length} records)\n\`\`\`json\n${JSON.stringify(compactDeals)}\n\`\`\``);
   }
 
   return parts.join("\n");
