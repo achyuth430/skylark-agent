@@ -4,7 +4,7 @@
  */
 
 import { getWorkOrders, getDeals, itemToObject, RawBoardData } from "./monday";
-import { cleanWorkOrder, cleanDeal, analyzeQuality } from "./dataClean";
+import { cleanWorkOrder, cleanDeal, analyzeQuality, summarizeDeals, summarizeWorkOrders } from "./dataClean";
 import { GoogleGenerativeAI, Content } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -105,11 +105,11 @@ You have access to real-time data from their Monday.com boards.
 Your job is to answer founder-level business questions with clarity, precision, and actionable insights.
 
 Guidelines:
+- Use the PRE-COMPUTED AGGREGATES provided below for exact 100% dataset metrics (totals, sector splits, stage funnels, win rates).
 - ALWAYS synthesize data into executive summaries, KPI metrics, tables, and sector-level aggregations.
 - NEVER list out raw individual records line-by-line or enumerate record names one by one.
-- Keep your response structured, direct, and concise (under 400 words).
+- Keep your response structured, direct, and thorough (use headers, bullet points, and tables).
 - If data is missing or incomplete, acknowledge it transparently and work with what's available.
-- Format responses with clear structure (use markdown headers, bullet points, and compact tables).
 - Think like a CFO/COO when interpreting the data.
 - For "leadership updates", produce a board-ready executive summary with key metrics, trends, and action items.
 
@@ -122,14 +122,21 @@ ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}
     parts.push(`\nDATA FETCH ERRORS (answer as best you can):\n${data.errors.join("\n")}`);
   }
 
-  if (data.workOrders) {
-    const compactWO = data.workOrders.map(({ _raw, ...rest }) => rest).slice(0, 80);
-    parts.push(`\n## WORK ORDERS DATA (sample of ${compactWO.length} of ${data.workOrders.length} records)\n\`\`\`json\n${JSON.stringify(compactWO)}\n\`\`\``);
+  if (data.deals) {
+    const summary = summarizeDeals(data.deals);
+    parts.push(`\n## DEALS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
+    
+    // Also include active deals with value > 0 for granular questions
+    const valuedDeals = data.deals.filter(d => (d.dealValue as number) > 0).map(({ _raw, ...rest }) => rest);
+    parts.push(`\n## ACTIVE VALUED DEALS LIST (${valuedDeals.length} deals)\n\`\`\`json\n${JSON.stringify(valuedDeals)}\n\`\`\``);
   }
 
-  if (data.deals) {
-    const compactDeals = data.deals.map(({ _raw, ...rest }) => rest).slice(0, 80);
-    parts.push(`\n## DEALS / PIPELINE DATA (sample of ${compactDeals.length} of ${data.deals.length} records)\n\`\`\`json\n${JSON.stringify(compactDeals)}\n\`\`\``);
+  if (data.workOrders) {
+    const summary = summarizeWorkOrders(data.workOrders);
+    parts.push(`\n## WORK ORDERS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
+    
+    const valuedWO = data.workOrders.filter(w => (w.contractValue as number) > 0).map(({ _raw, ...rest }) => rest);
+    parts.push(`\n## ACTIVE VALUED WORK ORDERS LIST (${valuedWO.length} orders)\n\`\`\`json\n${JSON.stringify(valuedWO)}\n\`\`\``);
   }
 
   return parts.join("\n");
@@ -181,7 +188,7 @@ export async function runAgent(
         model: modelName,
         systemInstruction: systemPrompt,
         generationConfig: {
-          maxOutputTokens: 850,
+          maxOutputTokens: 1500,
         },
       });
 

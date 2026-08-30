@@ -206,3 +206,131 @@ export function cleanDeal(raw: Record<string, string>): Record<string, unknown> 
     product: raw["Product deal"] ?? "",
   };
 }
+
+// ─── Pre-Aggregation Functions ────────────────────────────────────────────
+
+export interface DealsSummary {
+  totalCount: number;
+  totalValue: number;
+  totalValueFormatted: string;
+  openCount: number;
+  openValue: number;
+  openValueFormatted: string;
+  stageBreakdown: Record<string, { count: number; value: number; formatted: string }>;
+  sectorBreakdown: Record<string, { count: number; value: number; formatted: string }>;
+  statusBreakdown: Record<string, { count: number; value: number; formatted: string }>;
+  avgDealSizeFormatted: string;
+}
+
+export function summarizeDeals(deals: Record<string, unknown>[]): DealsSummary {
+  let totalValue = 0;
+  let openValue = 0;
+  let openCount = 0;
+  let valuedDealsCount = 0;
+
+  const stageBreakdown: Record<string, { count: number; value: number; formatted: string }> = {};
+  const sectorBreakdown: Record<string, { count: number; value: number; formatted: string }> = {};
+  const statusBreakdown: Record<string, { count: number; value: number; formatted: string }> = {};
+
+  for (const d of deals) {
+    const val = typeof d.dealValue === "number" ? d.dealValue : 0;
+    if (val > 0) valuedDealsCount++;
+
+    totalValue += val;
+
+    const stage = String(d.stage || "Unknown");
+    const sector = String(d.sector || "Unknown");
+    const status = String(d.status || "Unknown");
+
+    const isOpen = status.toLowerCase().includes("open") || !status.toLowerCase().includes("closed");
+    if (isOpen) {
+      openCount++;
+      openValue += val;
+    }
+
+    // Stage aggregate
+    if (!stageBreakdown[stage]) stageBreakdown[stage] = { count: 0, value: 0, formatted: "" };
+    stageBreakdown[stage].count++;
+    stageBreakdown[stage].value += val;
+
+    // Sector aggregate
+    if (!sectorBreakdown[sector]) sectorBreakdown[sector] = { count: 0, value: 0, formatted: "" };
+    sectorBreakdown[sector].count++;
+    sectorBreakdown[sector].value += val;
+
+    // Status aggregate
+    if (!statusBreakdown[status]) statusBreakdown[status] = { count: 0, value: 0, formatted: "" };
+    statusBreakdown[status].count++;
+    statusBreakdown[status].value += val;
+  }
+
+  // Format values
+  for (const k in stageBreakdown) stageBreakdown[k].formatted = formatCurrency(stageBreakdown[k].value);
+  for (const k in sectorBreakdown) sectorBreakdown[k].formatted = formatCurrency(sectorBreakdown[k].value);
+  for (const k in statusBreakdown) statusBreakdown[k].formatted = formatCurrency(statusBreakdown[k].value);
+
+  const avgDealSize = valuedDealsCount > 0 ? totalValue / valuedDealsCount : 0;
+
+  return {
+    totalCount: deals.length,
+    totalValue,
+    totalValueFormatted: formatCurrency(totalValue),
+    openCount,
+    openValue,
+    openValueFormatted: formatCurrency(openValue),
+    stageBreakdown,
+    sectorBreakdown,
+    statusBreakdown,
+    avgDealSizeFormatted: formatCurrency(avgDealSize),
+  };
+}
+
+export interface WorkOrdersSummary {
+  totalCount: number;
+  totalContractValue: number;
+  totalContractValueFormatted: string;
+  totalBilledValue: number;
+  totalBilledValueFormatted: string;
+  statusBreakdown: Record<string, { count: number; value: number; formatted: string }>;
+  sectorBreakdown: Record<string, { count: number; value: number; formatted: string }>;
+}
+
+export function summarizeWorkOrders(workOrders: Record<string, unknown>[]): WorkOrdersSummary {
+  let totalContractValue = 0;
+  let totalBilledValue = 0;
+
+  const statusBreakdown: Record<string, { count: number; value: number; formatted: string }> = {};
+  const sectorBreakdown: Record<string, { count: number; value: number; formatted: string }> = {};
+
+  for (const wo of workOrders) {
+    const val = typeof wo.contractValue === "number" ? wo.contractValue : 0;
+    const billed = typeof wo.billedValue === "number" ? wo.billedValue : 0;
+
+    totalContractValue += val;
+    totalBilledValue += billed;
+
+    const status = String(wo.status || "Unknown");
+    const sector = String(wo.sector || "Unknown");
+
+    if (!statusBreakdown[status]) statusBreakdown[status] = { count: 0, value: 0, formatted: "" };
+    statusBreakdown[status].count++;
+    statusBreakdown[status].value += val;
+
+    if (!sectorBreakdown[sector]) sectorBreakdown[sector] = { count: 0, value: 0, formatted: "" };
+    sectorBreakdown[sector].count++;
+    sectorBreakdown[sector].value += val;
+  }
+
+  for (const k in statusBreakdown) statusBreakdown[k].formatted = formatCurrency(statusBreakdown[k].value);
+  for (const k in sectorBreakdown) sectorBreakdown[k].formatted = formatCurrency(sectorBreakdown[k].value);
+
+  return {
+    totalCount: workOrders.length,
+    totalContractValue,
+    totalContractValueFormatted: formatCurrency(totalContractValue),
+    totalBilledValue,
+    totalBilledValueFormatted: formatCurrency(totalBilledValue),
+    statusBreakdown,
+    sectorBreakdown,
+  };
+}
