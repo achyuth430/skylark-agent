@@ -74,7 +74,7 @@ async function fetchRelevantData(source: DataSource): Promise<FetchedData> {
       fetchBoard(
         getWorkOrders,
         cleanWorkOrder,
-        ["Status", "Client", "Contract Value", "Start Date", "End Date"],
+        ["WO Status (billed)", "Sector", "Amount in Rupees (Excl of GST) (Masked)"],
         "workOrders"
       )
     );
@@ -85,7 +85,7 @@ async function fetchRelevantData(source: DataSource): Promise<FetchedData> {
       fetchBoard(
         getDeals,
         cleanDeal,
-        ["Status", "Client", "Deal Value", "Close Date", "Probability"],
+        ["Deal Stage", "Sector/service", "Masked Deal value"],
         "deals"
       )
     );

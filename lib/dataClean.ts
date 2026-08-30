@@ -151,46 +151,58 @@ export function analyzeQuality(
 // ─── Full Record Cleaner ──────────────────────────────────────────────────
 
 export function cleanWorkOrder(raw: Record<string, string>): Record<string, unknown> {
-  const amount = parseCurrency(raw["Contract Value"] ?? raw["Amount"] ?? raw["Value"] ?? raw["Budget"]);
-  const startDate = parseDate(raw["Start Date"] ?? raw["start_date"]);
-  const endDate = parseDate(raw["End Date"] ?? raw["end_date"] ?? raw["Deadline"]);
+  const amount = parseCurrency(
+    raw["Amount in Rupees (Excl of GST) (Masked)"] ??
+    raw["Amount in Rupees (Incl of GST) (Masked)"] ??
+    raw["Contract Value"] ?? raw["Amount"] ?? raw["Value"] ?? raw["Budget"]
+  );
+  const billedAmount = parseCurrency(
+    raw["Billed Value in Rupees (Excl of GST.) (Masked)"] ??
+    raw["Billed Value in Rupees (Incl of GST.) (Masked)"]
+  );
+  const startDate = parseDate(raw["Probable Start Date"] ?? raw["Start Date"] ?? raw["start_date"]);
+  const endDate = parseDate(raw["Probable End Date"] ?? raw["End Date"] ?? raw["end_date"] ?? raw["Deadline"]);
 
   return {
     id: raw.id,
     name: raw.name || "Unnamed Work Order",
-    status: normalizeStatus(raw["Status"] ?? raw["status"]),
+    status: normalizeStatus(raw["WO Status (billed)"] ?? raw["Billing Status"] ?? raw["Invoice Status"] ?? raw["Status"] ?? raw["status"]),
     sector: normalizeSector(raw["Sector"] ?? raw["Industry"] ?? raw["Category"]),
-    client: raw["Client"] ?? raw["Customer"] ?? raw["Account"] ?? "Unknown",
+    client: raw["Client Code"] ?? raw["Client"] ?? raw["Customer"] ?? raw["Account"] ?? "Unknown",
     contractValue: amount,
     contractValueFormatted: formatCurrency(amount),
+    billedValue: billedAmount,
+    billedValueFormatted: formatCurrency(billedAmount),
     startDate: formatDate(startDate),
     endDate: formatDate(endDate),
-    assignee: raw["Assignee"] ?? raw["Owner"] ?? raw["Person"] ?? "Unassigned",
-    location: raw["Location"] ?? raw["City"] ?? raw["Region"] ?? "Unknown",
+    assignee: raw["BD/KAM Personnel code"] ?? raw["Assignee"] ?? raw["Owner"] ?? raw["Person"] ?? "Unassigned",
+    workType: raw["Type of Work"] ?? raw["Work Type"] ?? "",
     notes: raw["Notes"] ?? raw["Description"] ?? "",
-    _raw: raw,
   };
 }
 
 export function cleanDeal(raw: Record<string, string>): Record<string, unknown> {
-  const value = parseCurrency(raw["Deal Value"] ?? raw["Value"] ?? raw["Amount"] ?? raw["Revenue"]);
-  const closeDate = parseDate(raw["Close Date"] ?? raw["Expected Close"] ?? raw["Closing Date"]);
-  const probStr = raw["Probability"] ?? raw["Win Probability"] ?? "";
+  const value = parseCurrency(
+    raw["Masked Deal value"] ?? raw["Deal Value"] ?? raw["Value"] ?? raw["Amount"] ?? raw["Revenue"]
+  );
+  const closeDate = parseDate(
+    raw["Tentative Close Date"] ?? raw["Close Date (A)"] ?? raw["Close Date"] ?? raw["Expected Close"]
+  );
+  const probStr = raw["Closure Probability"] ?? raw["Probability"] ?? raw["Win Probability"] ?? "";
   const prob = probStr ? parseFloat(probStr.replace("%", "")) : null;
 
   return {
     id: raw.id,
     name: raw.name || "Unnamed Deal",
-    status: normalizeStatus(raw["Status"] ?? raw["Stage"] ?? raw["status"]),
-    sector: normalizeSector(raw["Sector"] ?? raw["Industry"] ?? raw["Vertical"]),
-    client: raw["Client"] ?? raw["Account"] ?? raw["Company"] ?? "Unknown",
+    stage: raw["Deal Stage"] ?? raw["Stage"] ?? "Unknown",
+    status: normalizeStatus(raw["Deal Status"] ?? raw["Status"] ?? raw["status"]),
+    sector: normalizeSector(raw["Sector/service"] ?? raw["Sector"] ?? raw["Industry"] ?? raw["Vertical"]),
+    client: raw["Client Code"] ?? raw["Client"] ?? raw["Account"] ?? raw["Company"] ?? "Unknown",
     dealValue: value,
     dealValueFormatted: formatCurrency(value),
-    probability: prob !== null && !isNaN(prob) ? `${prob}%` : "Unknown",
+    probability: probStr || (prob !== null && !isNaN(prob) ? `${prob}%` : "Unknown"),
     closeDate: formatDate(closeDate),
-    owner: raw["Owner"] ?? raw["Sales Rep"] ?? raw["Assignee"] ?? raw["Person"] ?? "Unassigned",
-    region: raw["Region"] ?? raw["Territory"] ?? raw["Location"] ?? "Unknown",
-    notes: raw["Notes"] ?? raw["Description"] ?? "",
-    _raw: raw,
+    owner: raw["Owner code"] ?? raw["Owner"] ?? raw["Sales Rep"] ?? raw["Assignee"] ?? "Unassigned",
+    product: raw["Product deal"] ?? "",
   };
 }
