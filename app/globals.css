@@ -267,7 +267,7 @@ html, body { height: 100%; background: var(--bg-primary); color: var(--text-prim
 .markdown-body tr:last-child td { border-bottom: none; }
 .markdown-body tr:hover td { background: rgba(255,255,255,0.03); }
 
-/* Streaming cursor */
+/* Streaming cursor & Thinking indicator */
 .cursor {
   display: inline-block;
   width: 2px;
@@ -278,6 +278,39 @@ html, body { height: 100%; background: var(--bg-primary); color: var(--text-prim
   animation: blink 0.8s steps(1) infinite;
 }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+.thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  padding: 2px 0;
+}
+
+.thinking-sparkle {
+  color: #a5b4fc;
+  animation: pulse-sparkle 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-sparkle {
+  0% { opacity: 0.4; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+.thinking-dots span {
+  animation: wave-dots 1.4s infinite ease-in-out both;
+  display: inline-block;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes wave-dots {
+  0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
 
 /* ─── Suggestions ──────────────────────────────────────────────────────── */
 .suggestions {

@@ -189,10 +189,22 @@ export default function Home() {
               <div className={`bubble ${msg.role}`}>
                 {msg.role === "model" ? (
                   <div className="markdown-body">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content || " "}
-                    </ReactMarkdown>
-                    {msg.isStreaming && <span className="cursor" aria-hidden="true" />}
+                    {msg.isStreaming && !msg.content ? (
+                      <div className="thinking-indicator">
+                        <span className="thinking-sparkle">⚡</span>
+                        <span>Querying Monday.com & analyzing metrics</span>
+                        <span className="thinking-dots">
+                          <span>.</span><span>.</span><span>.</span>
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                        {msg.isStreaming && <span className="cursor" aria-hidden="true" />}
+                      </>
+                    )}
                   </div>
                 ) : (
                   <p>{msg.content}</p>
