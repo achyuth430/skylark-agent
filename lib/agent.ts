@@ -264,7 +264,7 @@ export async function runAgent(
         model: modelName,
         systemInstruction: systemPrompt,
         generationConfig: {
-          maxOutputTokens: 1200,
+          maxOutputTokens: 2048,
           temperature: 0.2, // low temp = consistent, factual output
         },
       });
