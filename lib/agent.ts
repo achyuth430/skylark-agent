@@ -105,6 +105,8 @@ You have access to real-time data from their Monday.com boards.
 Your job is to answer founder-level business questions with clarity, precision, and actionable insights.
 
 Guidelines:
+- ALWAYS synthesize data into executive summaries, KPI metrics, tables, and sector-level aggregations.
+- NEVER list out raw individual records line-by-line or enumerate record names one by one.
 - Be concise but insightful. Don't just state numbers — explain what they mean.
 - If data is missing or incomplete, acknowledge it transparently and work with what's available.
 - Format responses with clear structure (use markdown headers, bullet points, and tables where helpful).
@@ -163,17 +165,39 @@ export async function runAgent(
   const firstUserIdx = rawHistory.findIndex((m) => m.role === "user");
   const geminiHistory: Content[] = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
 
-  // 5. Create Gemini chat with streaming
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
-    systemInstruction: systemPrompt,
-    generationConfig: {
-      maxOutputTokens: 1200,
-    },
-  });
+  // 5. Create Gemini chat with streaming (with automatic model fallback on 429 rate limit)
+  const candidateModels = [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.6-flash",
+  ];
 
-  const chat = model.startChat({ history: geminiHistory });
-  const streamResult = await chat.sendMessageStream(userMessage);
+  let streamResult: any = null;
+  let lastError: Error | null = null;
+
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+        generationConfig: {
+          maxOutputTokens: 2048,
+        },
+      });
+
+      const chat = model.startChat({ history: geminiHistory });
+      streamResult = await chat.sendMessageStream(userMessage);
+      if (streamResult) break;
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Model ${modelName} failed, trying next fallback:`, lastError.message);
+    }
+  }
+
+  if (!streamResult) {
+    throw lastError || new Error("All Gemini model fallbacks failed.");
+  }
 
   // 6. Return a ReadableStream that emits text chunks
   return new ReadableStream<string>({
