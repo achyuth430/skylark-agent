@@ -4,7 +4,7 @@
  */
 
 import { getWorkOrders, getDeals, itemToObject, RawBoardData } from "./monday";
-import { cleanWorkOrder, cleanDeal, analyzeQuality, summarizeDeals, summarizeWorkOrders } from "./dataClean";
+import { cleanWorkOrder, cleanDeal, analyzeQuality, summarizeDeals, summarizeWorkOrders, formatCurrency } from "./dataClean";
 import { GoogleGenerativeAI, Content } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -16,22 +16,26 @@ type DataSource = "work_orders" | "deals" | "both";
 function classifyQuery(query: string): DataSource {
   const q = query.toLowerCase();
 
-  const isExplicitWO = q.includes("work order") || q.includes("work_order") || q.includes("completed work");
-  const isExplicitDeal = q.includes("deal") || q.includes("pipeline") || q.includes("stage");
+  const isExplicitWO =
+    q.includes("work order") || q.includes("work_order") ||
+    q.includes("completed work") || q.includes("billed") ||
+    q.includes("invoiced") || q.includes("executed project");
+
+  const isExplicitDeal =
+    q.includes("deal") || q.includes("pipeline") || q.includes("stage") ||
+    q.includes("funnel") || q.includes("prospect") || q.includes("lead") ||
+    q.includes("win rate") || q.includes("conversion") || q.includes("close");
 
   if (isExplicitWO && !isExplicitDeal) return "work_orders";
   if (isExplicitDeal && !isExplicitWO) return "deals";
 
   const workOrderKeywords = [
-    "project", "execution", "operational", "deployed",
-    "flight", "pilot", "team", "task", "deliverable", "milestone",
-    "timeline", "deadline", "contract", "assignment", "billed",
+    "execution", "operational", "deployed", "flight", "pilot", "team",
+    "task", "deliverable", "milestone", "timeline", "deadline", "assignment",
   ];
-
   const dealKeywords = [
-    "sales", "prospect", "lead",
-    "win", "lost", "close", "probability", "conversion", "funnel",
-    "opportunity", "crm", "forecast", "target",
+    "sales", "revenue", "opportunity", "crm", "forecast", "target",
+    "won", "lost", "probability",
   ];
 
   const hasWO = workOrderKeywords.some((k) => q.includes(k));
@@ -39,7 +43,7 @@ function classifyQuery(query: string): DataSource {
 
   if (hasWO && !hasDeal) return "work_orders";
   if (hasDeal && !hasWO) return "deals";
-  return "both"; // default: check both boards for cross-board analysis
+  return "both";
 }
 
 // ─── Data Fetcher ─────────────────────────────────────────────────────────
@@ -98,52 +102,118 @@ async function fetchRelevantData(source: DataSource): Promise<FetchedData> {
   }
 
   await Promise.all(tasks);
-
   return result;
 }
 
 // ─── System Prompt Builder ────────────────────────────────────────────────
 
-function buildSystemPrompt(data: FetchedData): string {
+function buildSystemPrompt(data: FetchedData, userQuery: string): string {
+  const q = userQuery.toLowerCase();
+
+  // Detect sector filter from query
+  const SECTORS = ["energy", "mining", "railways", "powerline", "renewables", "dsp", "oil", "agriculture", "defence", "telecom", "smart city", "infrastructure"];
+  const mentionedSector = SECTORS.find((s) => q.includes(s));
+
   const parts: string[] = [
-    `You are Skylark Intelligence, a Business Intelligence agent for Skylark Drones — a drone services company operating in India.
-You have access to real-time data from their Monday.com boards.
-Your job is to answer founder-level business questions with clarity, precision, and actionable insights.
+    `You are Skylark Intelligence, an expert BI analyst for Skylark Drones (drone services company in India).
+Answer the user's business question using ONLY the structured data below. Be precise, complete, and executive-ready.
 
-Guidelines:
-- Use the PRE-COMPUTED AGGREGATES provided below for exact 100% dataset metrics (totals, sector splits, stage funnels, win rates).
-- ALWAYS synthesize data into executive summaries, KPI metrics, tables, and sector-level aggregations.
-- NEVER list out raw individual records or print internal database IDs (e.g. "ID: 2848226101").
-- Format deal & order details in markdown tables with columns: Name, Stage/Status, Sector, Client, Value.
-- Keep your response structured, direct, and thorough (use headers, bullet points, and tables).
-- If data is missing or incomplete, acknowledge it transparently and work with what's available.
-- Think like a CFO/COO when interpreting the data.
-- For "leadership updates", produce a board-ready executive summary with key metrics, trends, and action items.
+RESPONSE RULES (follow strictly):
+1. Use markdown headers, bullet points, and tables for structure.
+2. Use ₹ formatted values (e.g. ₹68.16 Cr, ₹12.5 L). Never print raw numbers like 2348928.
+3. NEVER print database IDs (e.g. "ID: 28482...") or raw JSON fields.
+4. When listing deals/orders, use a clean markdown table: | Deal/Order | Stage | Sector | Client | Value |
+5. Always end with 2-3 bullet point "Key Actions" or "Recommendations".
+6. If data is missing or zero, say so clearly and explain what data exists.
 
-Data Quality Notes:
-${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}`).join("\n") : "✅ Data quality looks acceptable."}
-`,
+Data Quality: ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}`).join("; ") : "✅ Good"}
+${data.errors.length > 0 ? `\nData Errors: ${data.errors.join("; ")}` : ""}`,
   ];
 
-  if (data.errors.length > 0) {
-    parts.push(`\nDATA FETCH ERRORS (answer as best you can):\n${data.errors.join("\n")}`);
-  }
-
+  // ── Deals aggregates ──
   if (data.deals) {
     const summary = summarizeDeals(data.deals);
-    parts.push(`\n## DEALS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
-    
-    // Also include active deals with value > 0 (without raw database IDs)
-    const valuedDeals = data.deals.filter(d => (d.dealValue as number) > 0).map(({ _raw, id, ...rest }) => rest);
-    parts.push(`\n## ACTIVE VALUED DEALS LIST (${valuedDeals.length} deals)\n\`\`\`json\n${JSON.stringify(valuedDeals)}\n\`\`\``);
+    parts.push(`
+## DEALS DATA (${summary.totalCount} total records)
+- Total Pipeline Value: ${summary.totalValueFormatted}
+- Open Pipeline: ${summary.openValueFormatted} across ${summary.openCount} deals
+- Avg Deal Size: ${summary.avgDealSizeFormatted}
+
+### Stage Breakdown:
+${Object.entries(summary.stageBreakdown)
+  .sort((a, b) => b[1].value - a[1].value)
+  .map(([stage, d]) => `- ${stage}: ${d.count} deals | ${d.formatted}`)
+  .join("\n")}
+
+### Sector Breakdown:
+${Object.entries(summary.sectorBreakdown)
+  .sort((a, b) => b[1].value - a[1].value)
+  .map(([sector, d]) => `- ${sector}: ${d.count} deals | ${d.formatted}`)
+  .join("\n")}`);
+
+    // Only include individual deal details when sector or specific breakdown is asked
+    const needsDetail =
+      mentionedSector ||
+      q.includes("which") || q.includes("list") || q.includes("show") ||
+      q.includes("at risk") || q.includes("lost") || q.includes("top");
+
+    if (needsDetail) {
+      const filteredDeals = data.deals
+        .filter((d) => {
+          if ((d.dealValue as number) <= 0) return false;
+          if (mentionedSector) return String(d.sector).toLowerCase().includes(mentionedSector);
+          return true;
+        })
+        .slice(0, 20) // cap at 20 to avoid token bloat
+        .map(({ _raw, id, ...rest }) => rest);
+
+      if (filteredDeals.length > 0) {
+        const label = mentionedSector ? `${mentionedSector.toUpperCase()} SECTOR DEALS` : "TOP VALUED DEALS";
+        parts.push(`\n### ${label} (${filteredDeals.length} records):\n\`\`\`json\n${JSON.stringify(filteredDeals)}\n\`\`\``);
+      }
+    }
   }
 
+  // ── Work Orders aggregates ──
   if (data.workOrders) {
     const summary = summarizeWorkOrders(data.workOrders);
-    parts.push(`\n## WORK ORDERS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
-    
-    const valuedWO = data.workOrders.filter(w => (w.contractValue as number) > 0).map(({ _raw, id, ...rest }) => rest);
-    parts.push(`\n## ACTIVE VALUED WORK ORDERS LIST (${valuedWO.length} orders)\n\`\`\`json\n${JSON.stringify(valuedWO)}\n\`\`\``);
+    parts.push(`
+## WORK ORDERS DATA (${summary.totalCount} total records)
+- Total Contract Value: ${summary.totalContractValueFormatted}
+- Total Billed Value: ${summary.totalBilledValueFormatted}
+- Collection Rate: ${summary.totalContractValue > 0 ? ((summary.totalBilledValue / summary.totalContractValue) * 100).toFixed(1) : 0}%
+
+### Status Breakdown:
+${Object.entries(summary.statusBreakdown)
+  .sort((a, b) => b[1].value - a[1].value)
+  .map(([status, d]) => `- ${status}: ${d.count} orders | ${d.formatted}`)
+  .join("\n")}
+
+### Sector Breakdown:
+${Object.entries(summary.sectorBreakdown)
+  .sort((a, b) => b[1].value - a[1].value)
+  .map(([sector, d]) => `- ${sector}: ${d.count} orders | ${d.formatted}`)
+  .join("\n")}`);
+
+    const needsWODetail =
+      mentionedSector ||
+      q.includes("which") || q.includes("list") || q.includes("show") ||
+      q.includes("completed") || q.includes("top");
+
+    if (needsWODetail) {
+      const filteredWO = data.workOrders
+        .filter((w) => {
+          if (mentionedSector) return String(w.sector).toLowerCase().includes(mentionedSector);
+          return (w.contractValue as number) > 0;
+        })
+        .slice(0, 20)
+        .map(({ _raw, id, ...rest }) => rest);
+
+      if (filteredWO.length > 0) {
+        const label = mentionedSector ? `${mentionedSector.toUpperCase()} SECTOR WORK ORDERS` : "TOP VALUED WORK ORDERS";
+        parts.push(`\n### ${label} (${filteredWO.length} records):\n\`\`\`json\n${JSON.stringify(filteredWO)}\n\`\`\``);
+      }
+    }
   }
 
   return parts.join("\n");
@@ -160,17 +230,16 @@ export async function runAgent(
   userMessage: string,
   history: ChatMessage[]
 ): Promise<ReadableStream<string>> {
-  // 1. Classify the query
+  // 1. Classify query
   const source = classifyQuery(userMessage);
 
-  // 2. Fetch relevant data from Monday.com
+  // 2. Fetch data (backed by local fallback — always fast)
   const data = await fetchRelevantData(source);
 
-  // 3. Build system prompt with live data injected
-  const systemPrompt = buildSystemPrompt(data);
+  // 3. Build lean, structured system prompt with relevant data only
+  const systemPrompt = buildSystemPrompt(data, userMessage);
 
-  // 4. Build conversation history for Gemini
-  // Keep only the last 4 messages to avoid token blowup and timeouts on follow-up questions
+  // 4. Build history (last 4 msgs, must start with user)
   const rawHistory: Content[] = history.slice(-4).map((msg) => ({
     role: msg.role,
     parts: [{ text: msg.content }],
@@ -178,15 +247,15 @@ export async function runAgent(
   const firstUserIdx = rawHistory.findIndex((m) => m.role === "user");
   const geminiHistory: Content[] = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
 
-  // 5. Create Gemini chat with streaming (with automatic model fallback on 429 rate limit)
+  // 5. Correct Gemini model names with fallback chain
   const candidateModels = [
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-3.6-flash",
+    "gemini-2.0-flash",        // fastest, best free-tier model
+    "gemini-1.5-flash",        // reliable fallback
+    "gemini-1.5-flash-8b",     // lightweight fallback
+    "gemini-2.0-flash-lite",   // lite fallback
   ];
 
-  let streamResult: any = null;
+  let streamResult: AsyncIterable<{ text: () => string }> | null = null;
   let lastError: Error | null = null;
 
   for (const modelName of candidateModels) {
@@ -195,28 +264,38 @@ export async function runAgent(
         model: modelName,
         systemInstruction: systemPrompt,
         generationConfig: {
-          maxOutputTokens: 1500,
+          maxOutputTokens: 1200,
+          temperature: 0.2, // low temp = consistent, factual output
         },
       });
 
       const chat = model.startChat({ history: geminiHistory });
-      streamResult = await chat.sendMessageStream(userMessage);
+
+      // Race Gemini API against 8s hard timeout (Vercel limit is 30s, data fetch takes ~2s)
+      const streamPromise = chat.sendMessageStream(userMessage);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Gemini API timeout after 8s")), 8000)
+      );
+
+      streamResult = (await Promise.race([streamPromise, timeoutPromise])).stream;
       if (streamResult) break;
     } catch (err: unknown) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`Model ${modelName} failed, trying next fallback:`, lastError.message);
+      console.warn(`Model ${modelName} failed:`, lastError.message);
+      // Only retry on rate limit or timeout, not auth errors
+      if (lastError.message.includes("API key") || lastError.message.includes("403")) break;
     }
   }
 
   if (!streamResult) {
-    throw lastError || new Error("All Gemini model fallbacks failed.");
+    throw lastError || new Error("All Gemini model fallbacks exhausted.");
   }
 
-  // 6. Return a ReadableStream that emits text chunks
+  // 6. Return a ReadableStream of text chunks
   return new ReadableStream<string>({
     async start(controller) {
       try {
-        for await (const chunk of streamResult.stream) {
+        for await (const chunk of streamResult!) {
           const text = chunk.text();
           if (text) controller.enqueue(text);
         }
