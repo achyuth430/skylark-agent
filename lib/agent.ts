@@ -77,9 +77,23 @@ Or type a custom range such as *"since April"* or *"Q1 FY2026"*.`;
 
 /**
  * Extracts a structured date range from the conversation history.
- * Returns null when the user wants all-time data or no time was specified.
+ * Only activates when the CURRENT user message itself references time.
+ * This prevents date context bleeding into unrelated follow-up questions.
+ * Returns null (all-time) when no time filter should apply.
  */
 function extractDateRange(history: ChatMessage[]): DateRange | null {
+  // Current message must reference time — otherwise always return null (all-time)
+  const currentMessage = history.at(-1)?.content.toLowerCase() ?? "";
+  const TIME_WORDS = [
+    "quarter", "month", "q1", "q2", "q3", "q4", "fy", "year",
+    "recent", "6 months", "six months", "3 months", "all-time", "all time",
+    "april", "may", "june", "july", "august", "september", "october",
+    "november", "december", "january", "february", "march",
+  ];
+  const currentHasTimeRef = TIME_WORDS.some((w) => currentMessage.includes(w));
+  if (!currentHasTimeRef) return null; // No time word in current query → all-time
+
+  // Now scan recent history for the resolved time period answer
   const recentText = history
     .slice(-6)
     .map((m) => m.content.toLowerCase())
@@ -371,14 +385,22 @@ ${Object.entries(summary.sectorBreakdown)
 
   // ── Work Orders ──
   if (data.workOrders) {
-    // Apply date-range filter on startDateRaw
+    // For WO date filtering, a record is "in range" if its end date (completion)
+    // OR start date falls within the window. End date is prioritised for revenue
+    // queries since completion time determines when revenue is recognised.
     const filteredWO = dateRange
-      ? applyDateFilter(data.workOrders, "startDateRaw", dateRange)
+      ? data.workOrders.filter((w) => {
+          const end = w["endDateRaw"];
+          const start = w["startDateRaw"];
+          const inRange = (d: unknown) =>
+            d instanceof Date && d >= dateRange.start && d <= dateRange.end;
+          return inRange(end) || inRange(start);
+        })
       : data.workOrders;
 
     const summary = summarizeWorkOrders(filteredWO);
     const rangeNote = dateRange
-      ? ` (${filteredWO.length} of ${data.workOrders.length} work orders fall within ${dateRange.label})`
+      ? ` (${filteredWO.length} of ${data.workOrders.length} work orders active in ${dateRange.label})`
       : "";
 
     parts.push(`
