@@ -1,5 +1,7 @@
 # Skylark Intelligence — BI Agent for Skylark Drones
 
+**Live Prototype URL:** [https://skylark-agent-flax.vercel.app](https://skylark-agent-flax.vercel.app)
+
 A conversational AI business intelligence agent that answers founder-level queries by dynamically reading live data from Monday.com boards.
 
 ## Architecture Overview
