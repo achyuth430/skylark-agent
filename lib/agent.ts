@@ -107,11 +107,10 @@ Your job is to answer founder-level business questions with clarity, precision, 
 Guidelines:
 - ALWAYS synthesize data into executive summaries, KPI metrics, tables, and sector-level aggregations.
 - NEVER list out raw individual records line-by-line or enumerate record names one by one.
-- Be concise but insightful. Don't just state numbers — explain what they mean.
+- Keep your response structured, direct, and concise (under 400 words).
 - If data is missing or incomplete, acknowledge it transparently and work with what's available.
-- Format responses with clear structure (use markdown headers, bullet points, and tables where helpful).
+- Format responses with clear structure (use markdown headers, bullet points, and compact tables).
 - Think like a CFO/COO when interpreting the data.
-- If a question is ambiguous, state your interpretation before answering.
 - For "leadership updates", produce a board-ready executive summary with key metrics, trends, and action items.
 
 Data Quality Notes:
@@ -124,13 +123,13 @@ ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}
   }
 
   if (data.workOrders) {
-    const compactWO = data.workOrders.map(({ _raw, ...rest }) => rest);
-    parts.push(`\n## WORK ORDERS DATA (${compactWO.length} records)\n\`\`\`json\n${JSON.stringify(compactWO)}\n\`\`\``);
+    const compactWO = data.workOrders.map(({ _raw, ...rest }) => rest).slice(0, 80);
+    parts.push(`\n## WORK ORDERS DATA (sample of ${compactWO.length} of ${data.workOrders.length} records)\n\`\`\`json\n${JSON.stringify(compactWO)}\n\`\`\``);
   }
 
   if (data.deals) {
-    const compactDeals = data.deals.map(({ _raw, ...rest }) => rest);
-    parts.push(`\n## DEALS / PIPELINE DATA (${compactDeals.length} records)\n\`\`\`json\n${JSON.stringify(compactDeals)}\n\`\`\``);
+    const compactDeals = data.deals.map(({ _raw, ...rest }) => rest).slice(0, 80);
+    parts.push(`\n## DEALS / PIPELINE DATA (sample of ${compactDeals.length} of ${data.deals.length} records)\n\`\`\`json\n${JSON.stringify(compactDeals)}\n\`\`\``);
   }
 
   return parts.join("\n");
@@ -182,7 +181,7 @@ export async function runAgent(
         model: modelName,
         systemInstruction: systemPrompt,
         generationConfig: {
-          maxOutputTokens: 2048,
+          maxOutputTokens: 850,
         },
       });
 
