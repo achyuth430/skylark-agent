@@ -249,10 +249,10 @@ export async function runAgent(
 
   // 5. Correct Gemini model names with fallback chain
   const candidateModels = [
-    "gemini-2.0-flash",        // fastest, best free-tier model
-    "gemini-1.5-flash",        // reliable fallback
-    "gemini-1.5-flash-8b",     // lightweight fallback
-    "gemini-2.0-flash-lite",   // lite fallback
+    "gemini-3.5-flash",        // latest recommended model
+    "gemini-3.5-flash-lite",   // lite fallback (per API guidance)
+    "gemini-2.0-flash",        // stable fallback
+    "gemini-1.5-flash",        // last resort fallback
   ];
 
   let streamResult: AsyncIterable<{ text: () => string }> | null = null;
