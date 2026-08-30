@@ -113,7 +113,8 @@ Your job is to answer founder-level business questions with clarity, precision, 
 Guidelines:
 - Use the PRE-COMPUTED AGGREGATES provided below for exact 100% dataset metrics (totals, sector splits, stage funnels, win rates).
 - ALWAYS synthesize data into executive summaries, KPI metrics, tables, and sector-level aggregations.
-- NEVER list out raw individual records line-by-line or enumerate record names one by one.
+- NEVER list out raw individual records or print internal database IDs (e.g. "ID: 2848226101").
+- Format deal & order details in markdown tables with columns: Name, Stage/Status, Sector, Client, Value.
 - Keep your response structured, direct, and thorough (use headers, bullet points, and tables).
 - If data is missing or incomplete, acknowledge it transparently and work with what's available.
 - Think like a CFO/COO when interpreting the data.
@@ -132,8 +133,8 @@ ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}
     const summary = summarizeDeals(data.deals);
     parts.push(`\n## DEALS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
     
-    // Also include active deals with value > 0 for granular questions
-    const valuedDeals = data.deals.filter(d => (d.dealValue as number) > 0).map(({ _raw, ...rest }) => rest);
+    // Also include active deals with value > 0 (without raw database IDs)
+    const valuedDeals = data.deals.filter(d => (d.dealValue as number) > 0).map(({ _raw, id, ...rest }) => rest);
     parts.push(`\n## ACTIVE VALUED DEALS LIST (${valuedDeals.length} deals)\n\`\`\`json\n${JSON.stringify(valuedDeals)}\n\`\`\``);
   }
 
@@ -141,7 +142,7 @@ ${data.qualityWarnings.length > 0 ? data.qualityWarnings.map((w) => `⚠️ ${w}
     const summary = summarizeWorkOrders(data.workOrders);
     parts.push(`\n## WORK ORDERS BOARD PRE-COMPUTED AGGREGATES (100% of ${summary.totalCount} records)\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``);
     
-    const valuedWO = data.workOrders.filter(w => (w.contractValue as number) > 0).map(({ _raw, ...rest }) => rest);
+    const valuedWO = data.workOrders.filter(w => (w.contractValue as number) > 0).map(({ _raw, id, ...rest }) => rest);
     parts.push(`\n## ACTIVE VALUED WORK ORDERS LIST (${valuedWO.length} orders)\n\`\`\`json\n${JSON.stringify(valuedWO)}\n\`\`\``);
   }
 
