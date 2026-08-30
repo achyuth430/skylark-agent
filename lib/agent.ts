@@ -155,8 +155,8 @@ export async function runAgent(
   const systemPrompt = buildSystemPrompt(data);
 
   // 4. Build conversation history for Gemini
-  // Gemini requires history to start with a 'user' message — strip any leading model messages
-  const rawHistory: Content[] = history.map((msg) => ({
+  // Keep only the last 4 messages to avoid token blowup and timeouts on follow-up questions
+  const rawHistory: Content[] = history.slice(-4).map((msg) => ({
     role: msg.role,
     parts: [{ text: msg.content }],
   }));
@@ -167,6 +167,9 @@ export async function runAgent(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: systemPrompt,
+    generationConfig: {
+      maxOutputTokens: 1200,
+    },
   });
 
   const chat = model.startChat({ history: geminiHistory });

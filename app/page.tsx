@@ -225,10 +225,10 @@ export default function Home() {
             </div>
           ))}
 
-          {/* Suggested queries */}
-          {showSuggestions && (
+          {/* Suggested queries - always visible for quick follow-ups */}
+          {!isLoading && (
             <div className="suggestions">
-              <p className="suggestions-label">Try asking:</p>
+              <p className="suggestions-label">Quick queries:</p>
               <div className="suggestions-grid">
                 {SUGGESTED_QUERIES.map((q) => (
                   <button
