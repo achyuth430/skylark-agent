@@ -1,6 +1,7 @@
 /**
  * Monday.com API Client
- * Fetches data from Work Orders and Deals boards via GraphQL
+ * Fetches data live from Work Orders and Deals boards via GraphQL
+ * No hardcoded/bundled data — all data comes from the Monday.com API.
  */
 
 const MONDAY_API_URL = "https://api.monday.com/v2";
@@ -32,9 +33,13 @@ export interface RawBoardData {
   boardName: string;
   boardId: string;
   items: MondayItem[];
+  dataSource: "live" | "error";
 }
 
-async function mondayGraphQL(query: string, variables?: Record<string, unknown>): Promise<unknown> {
+async function mondayGraphQL(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<unknown> {
   const token = process.env.MONDAY_API_KEY;
   if (!token) throw new Error("MONDAY_API_KEY environment variable is not set.");
 
@@ -61,73 +66,55 @@ async function mondayGraphQL(query: string, variables?: Record<string, unknown>)
   return json.data;
 }
 
+// In-memory cache (5 minutes TTL) — reduces Monday.com API calls on repeated queries
 const cache = new Map<string, { timestamp: number; data: MondayItem[] }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-import woBackup from "../data/work_orders.json";
-import dealsBackup from "../data/deals.json";
+const GQL_QUERY = `
+  query GetBoardItems($boardId: ID!) {
+    boards(ids: [$boardId]) {
+      id
+      name
+      items_page(limit: 500) {
+        cursor
+        items {
+          id
+          name
+          column_values {
+            id
+            type
+            text
+            value
+            column {
+              title
+            }
+          }
+        }
+      }
+    }
+  }
+`;
 
 /**
- * Fetch all items from a board (handles pagination up to 500 items, cached for 5 min, with 2.5s fallback)
+ * Fetch all items from a board.
+ * Cached for 5 minutes. Throws clearly on failure — no silent stale data.
  */
-async function fetchBoardItems(boardId: string, isWorkOrders: boolean): Promise<MondayItem[]> {
+async function fetchBoardItems(boardId: string): Promise<MondayItem[]> {
   const cached = cache.get(boardId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
   }
 
-  const backupData = (isWorkOrders ? woBackup : dealsBackup) as MondayItem[];
+  const data = (await mondayGraphQL(GQL_QUERY, { boardId })) as {
+    boards: MondayBoard[];
+  };
 
-  try {
-    const query = `
-      query GetBoardItems($boardId: ID!, $cursor: String) {
-        boards(ids: [$boardId]) {
-          id
-          name
-          items_page(limit: 500, cursor: $cursor) {
-            cursor
-            items {
-              id
-              name
-              column_values {
-                id
-                type
-                text
-                value
-                column {
-                  title
-                }
-              }
-            }
-          }
-        }
-      }
-    `;
+  const board = data.boards[0];
+  if (!board) throw new Error(`Board ${boardId} not found or not accessible.`);
 
-    // Race network request against a 2500ms timeout
-    const fetchPromise = (async () => {
-      const data = (await mondayGraphQL(query, { boardId })) as {
-        boards: MondayBoard[];
-      };
-      const board = data.boards[0];
-      return board?.items_page?.items || backupData;
-    })();
-
-    const timeoutPromise = new Promise<MondayItem[]>((resolve) =>
-      setTimeout(() => {
-        console.warn(`Monday API timeout for board ${boardId}, using bundled dataset fallback`);
-        resolve(backupData);
-      }, 2500)
-    );
-
-    const items = await Promise.race([fetchPromise, timeoutPromise]);
-    cache.set(boardId, { timestamp: Date.now(), data: items });
-    return items;
-  } catch (err) {
-    console.warn(`Monday API failed for board ${boardId}, using bundled dataset fallback`, err);
-    cache.set(boardId, { timestamp: Date.now(), data: backupData });
-    return backupData;
-  }
+  const items = board.items_page.items;
+  cache.set(boardId, { timestamp: Date.now(), data: items });
+  return items;
 }
 
 /**
@@ -135,8 +122,8 @@ async function fetchBoardItems(boardId: string, isWorkOrders: boolean): Promise<
  */
 export async function getWorkOrders(): Promise<RawBoardData> {
   const boardId = process.env.WORK_ORDERS_BOARD_ID || "5030963276";
-  const items = await fetchBoardItems(boardId, true);
-  return { boardName: "Work Orders", boardId, items };
+  const items = await fetchBoardItems(boardId);
+  return { boardName: "Work Orders", boardId, items, dataSource: "live" };
 }
 
 /**
@@ -144,8 +131,8 @@ export async function getWorkOrders(): Promise<RawBoardData> {
  */
 export async function getDeals(): Promise<RawBoardData> {
   const boardId = process.env.DEALS_BOARD_ID || "5030963270";
-  const items = await fetchBoardItems(boardId, false);
-  return { boardName: "Deals", boardId, items };
+  const items = await fetchBoardItems(boardId);
+  return { boardName: "Deals", boardId, items, dataSource: "live" };
 }
 
 /**

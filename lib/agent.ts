@@ -134,18 +134,21 @@ ${data.errors.length > 0 ? `\nData Errors: ${data.errors.join("; ")}` : ""}`,
   if (data.deals) {
     const summary = summarizeDeals(data.deals);
     parts.push(`
-## DEALS DATA (${summary.totalCount} total records)
-- Total Pipeline Value: ${summary.totalValueFormatted}
-- Open Pipeline: ${summary.openValueFormatted} across ${summary.openCount} deals
-- Avg Deal Size: ${summary.avgDealSizeFormatted}
+## DEALS DATA (${summary.totalCount} total records | ${summary.dealsWithValue} have values | ${summary.dealsWithoutValue} missing values)
+- Total Pipeline Value (all deals): ${summary.totalValueFormatted}
+- Open Active Pipeline (A–F stages): ${summary.openValueFormatted} across ${summary.openCount} deals
+- Weighted Pipeline (probability-adjusted): ${summary.weightedPipelineFormatted}
+- Won: ${summary.wonCount} deals | Lost: ${summary.lostCount} deals | Win Rate: ${summary.winRate}
+- Avg Deal Size (valued deals): ${summary.avgDealSizeFormatted}
+- NOTE: ${summary.dealsWithoutValue} deals (${Math.round((summary.dealsWithoutValue/summary.totalCount)*100)}%) have no deal value recorded in Monday.com
 
-### Stage Breakdown:
+### Stage Breakdown (by value):
 ${Object.entries(summary.stageBreakdown)
   .sort((a, b) => b[1].value - a[1].value)
   .map(([stage, d]) => `- ${stage}: ${d.count} deals | ${d.formatted}`)
   .join("\n")}
 
-### Sector Breakdown:
+### Sector Breakdown (by value):
 ${Object.entries(summary.sectorBreakdown)
   .sort((a, b) => b[1].value - a[1].value)
   .map(([sector, d]) => `- ${sector}: ${d.count} deals | ${d.formatted}`)
@@ -180,16 +183,21 @@ ${Object.entries(summary.sectorBreakdown)
     parts.push(`
 ## WORK ORDERS DATA (${summary.totalCount} total records)
 - Total Contract Value: ${summary.totalContractValueFormatted}
+- Completed Orders: ${summary.completedCount} | Contract Value: ${summary.completedContractValueFormatted}
+- Active/Ongoing Orders: ${summary.activeCount}
+- On Hold: ${summary.onHoldCount} | Not Started: ${summary.notStartedCount}
+- Overdue (past end date, not completed): ${summary.overdueCount}
 - Total Billed Value: ${summary.totalBilledValueFormatted}
-- Collection Rate: ${summary.totalContractValue > 0 ? ((summary.totalBilledValue / summary.totalContractValue) * 100).toFixed(1) : 0}%
+- Collection Rate: ${summary.collectionRate}
+- NOTE: Status derived from Execution Status for records with missing billing status
 
-### Status Breakdown:
+### Status Breakdown (by contract value):
 ${Object.entries(summary.statusBreakdown)
   .sort((a, b) => b[1].value - a[1].value)
   .map(([status, d]) => `- ${status}: ${d.count} orders | ${d.formatted}`)
   .join("\n")}
 
-### Sector Breakdown:
+### Sector Breakdown (by contract value):
 ${Object.entries(summary.sectorBreakdown)
   .sort((a, b) => b[1].value - a[1].value)
   .map(([sector, d]) => `- ${sector}: ${d.count} orders | ${d.formatted}`)

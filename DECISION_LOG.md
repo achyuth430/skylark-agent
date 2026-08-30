@@ -2,55 +2,46 @@
 
 ## Key Assumptions
 
-1. **Data is read-only.** The assignment says Monday.com integration is read-only, so no writes or mutations are performed.
-
-2. **GraphQL over MCP.** I chose Monday.com's REST/GraphQL API over MCP because it requires no additional server-side MCP tooling, works natively in Next.js API routes, and is simpler to host on Vercel. The API is well-documented and stable.
-
-3. **Gemini Flash as the LLM.** Using `gemini-1.5-flash` — it has a generous free tier, supports long context windows (needed for injecting full board data), and streams responses. This is ideal for a prototype that must be testable without setup.
-
-4. **Data injection (RAG-lite) over function calling.** I chose to inject the full cleaned board data into the system prompt rather than using LLM function calling to fetch data mid-conversation. Rationale: the boards have ~100–500 records, which fits comfortably in Flash's 1M context window, and this approach gives the LLM full context for cross-board analysis without multiple round-trips.
-
-5. **"Messy data" handling.** I assumed the data contains: inconsistent date formats (DD/MM/YYYY vs ISO vs written-out months), varying currency representations (₹1,00,000 vs 1L vs 100000), sector names in different cases/abbreviations, and missing values. The cleaning layer handles all of these gracefully.
-
-6. **No user authentication.** The prototype is a single-user demo. A production version would add OAuth / API key per-tenant.
+1. **Read-only access.** No writes to Monday.com — only GraphQL reads.
+2. **GraphQL API over MCP.** Monday.com's native GraphQL API works directly in Next.js API routes on Vercel without extra server tooling. MCP would require a separate long-running process incompatible with Vercel's serverless model.
+3. **Gemini Flash as LLM.** `gemini-3.5-flash` — generous free tier, long context window (needed for injecting structured board data), streams responses natively.
+4. **Data injection (RAG-lite) over function calling.** The boards have ~100–500 records that fit in Gemini's context window. Injecting pre-aggregated summaries + filtered record lists gives the LLM full context for cross-board analysis in a single API call, avoiding multiple round-trip latency.
+5. **Messy data expected.** The cleaning layer handles: inconsistent date formats (ISO, DD/MM/YYYY, written-out months), currency representations (₹1,00,000 / 1L / 100000), sector/status values in different cases, typos ("BIlled"), and missing values. 42% of Work Orders have an empty "WO Status (billed)" field — resolved by falling back to the "Execution Status" column.
+6. **Qualitative probability.** The Deals board uses "High / Medium / Low" rather than numeric probabilities. Mapped to 70% / 40% / 15% respectively for weighted pipeline calculations, documented transparently in responses.
 
 ---
 
-## Trade-offs Chosen and Why
+## Trade-offs
 
-| Decision | Alternative Considered | Why I Chose This |
+| Decision | Alternative | Why this |
 |---|---|---|
-| Next.js (full-stack) | Separate Express backend + React frontend | Simpler deployment on Vercel with a single repo |
-| Gemini Flash | GPT-4o, Claude | Free tier, no credit card, adequate quality for BI |
-| Full data injection | LLM function calling | Fewer API round-trips, simpler, works for prototype scale |
-| GraphQL API | Monday.com MCP | No MCP server setup needed; deploys on Vercel |
-| Streaming responses | Batch response | Better UX for long BI answers; shows progress |
-| Vanilla CSS | Tailwind CSS | More control over premium glassmorphism design |
+| Next.js full-stack | Separate Express + React | Single repo, one-click Vercel deploy |
+| Gemini Flash | GPT-4o, Claude | Free tier, no credit card, sufficient for BI |
+| Pre-aggregated prompt injection | LLM function calling | No extra API round-trips; simpler; works at prototype scale |
+| GraphQL API | Monday.com MCP | No sidecar process; deploys on Vercel serverless |
+| Streaming responses | Batch | Better UX for long reports; shows progress immediately |
+| 5-min in-memory cache | No cache | Reduces Monday.com API quota usage on repeated queries |
 
 ---
 
 ## What I'd Do Differently With More Time
 
-1. **Semantic caching** — Cache board data for 5 minutes to reduce Monday.com API calls on repeated similar queries.
-2. **LLM function calling** — Let the LLM decide exactly which columns/filters to query rather than fetching everything. This would scale better for boards with thousands of items.
-3. **Chart generation** — Use Recharts or Chart.js to render bar/line charts for pipeline trends instead of markdown tables.
-4. **Webhook sync** — Subscribe to Monday.com webhooks to keep a local cache always fresh, enabling sub-second query response.
-5. **Multi-tenancy** — Per-workspace API key management so multiple teams can use the agent.
-6. **Conversation memory** — Persist conversation history across sessions using a database (Postgres/Supabase).
+1. **Date-range filtering** — Add true "this quarter" / "this month" filtering by comparing `closeDate` / `startDate` against query-extracted date ranges.
+2. **LLM function calling** — Let Gemini dynamically decide which columns to fetch rather than injecting everything, enabling scale to 10,000+ item boards.
+3. **Chart rendering** — Recharts bar/line charts for pipeline trend and sector comparison instead of markdown tables.
+4. **Webhook sync** — Subscribe to Monday.com webhooks to maintain a fresh local cache, enabling sub-100ms data access.
+5. **Conversation memory** — Persist history across sessions using Postgres/Supabase.
 
 ---
 
-## How I Interpreted "Leadership Updates"
+## Interpretation of "Leadership Updates"
 
-The requirement says: *"The agent should help prepare data for leadership updates."*
+When a user asks for a "leadership update", "board update", or "executive summary", the agent generates a structured briefing suitable for pasting into a board deck or weekly email:
 
-**My interpretation:** When a user asks for a "leadership update" or "board update" or "executive summary," the agent generates a structured briefing document suitable for pasting into a presentation or sending as a weekly update email.
+- **Pipeline Health** — Total pipeline value, stage funnel, top sectors
+- **Operational Wins** — Completed work orders, revenue billed
+- **At-Risk Items** — Stalled deals, overdue work orders
+- **Key Metrics** — Win rate, average deal size, collection rate
+- **Action Items** — Specific deals/orders needing attention
 
-**Format produced:**
-- 📊 **Pipeline Health** — Total pipeline value, deals by stage, sector breakdown
-- ✅ **Operational Wins** — Completed work orders this month, revenue recognized
-- ⚠️ **At-Risk Items** — Stalled deals (no movement in 30+ days), overdue work orders
-- 🎯 **Key Metrics** — Win rate, average deal size, average project duration
-- 📋 **Action Items** — Specific deals/orders needing attention
-
-This framing treats the agent as a "chief of staff" that surfaces the right information for a board-level conversation without requiring manual data pulls.
+This treats the agent as a "chief of staff" that surfaces board-ready intelligence without manual data pulls.
