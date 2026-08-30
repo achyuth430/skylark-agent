@@ -67,23 +67,31 @@ async function fetchRelevantData(source: DataSource): Promise<FetchedData> {
     }
   };
 
+  const tasks: Promise<void>[] = [];
+
   if (source === "work_orders" || source === "both") {
-    await fetchBoard(
-      getWorkOrders,
-      cleanWorkOrder,
-      ["Status", "Client", "Contract Value", "Start Date", "End Date"],
-      "workOrders"
+    tasks.push(
+      fetchBoard(
+        getWorkOrders,
+        cleanWorkOrder,
+        ["Status", "Client", "Contract Value", "Start Date", "End Date"],
+        "workOrders"
+      )
     );
   }
 
   if (source === "deals" || source === "both") {
-    await fetchBoard(
-      getDeals,
-      cleanDeal,
-      ["Status", "Client", "Deal Value", "Close Date", "Probability"],
-      "deals"
+    tasks.push(
+      fetchBoard(
+        getDeals,
+        cleanDeal,
+        ["Status", "Client", "Deal Value", "Close Date", "Probability"],
+        "deals"
+      )
     );
   }
+
+  await Promise.all(tasks);
 
   return result;
 }

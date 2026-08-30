@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { runAgent, ChatMessage } from "@/lib/agent";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {

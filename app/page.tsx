@@ -67,8 +67,13 @@ export default function Home() {
         });
 
         if (!res.ok || !res.body) {
-          const err = await res.json().catch(() => ({ error: "Unknown error" }));
-          throw new Error(err.error ?? "Request failed");
+          const rawText = await res.text().catch(() => "");
+          let jsonErr;
+          try {
+            jsonErr = JSON.parse(rawText);
+          } catch {}
+          const errorMsg = jsonErr?.error || rawText || `Server responded with status ${res.status}`;
+          throw new Error(errorMsg);
         }
 
         const reader = res.body.getReader();
