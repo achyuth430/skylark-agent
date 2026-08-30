@@ -266,7 +266,9 @@ export function cleanWorkOrder(raw: Record<string, string>): Record<string, unkn
     billedValue: billedAmount ?? 0,
     billedValueFormatted: formatCurrency(billedAmount),
     startDate: formatDate(startDate),
+    startDateRaw: startDate,           // Date | null — used for date-range filtering
     endDate: formatDate(endDate),
+    endDateRaw: endDate,               // Date | null — used for date-range filtering
     assignee: raw["BD/KAM Personnel code"] ?? raw["Assignee"] ?? raw["Owner"] ?? "Unassigned",
     workType: raw["Type of Work"] ?? raw["Work Type"] ?? "",
     _raw: raw, // kept internally for quality analysis

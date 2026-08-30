@@ -101,7 +101,17 @@ Open [http://localhost:3000](http://localhost:3000)
 | Layer | Technology | Reason |
 |---|---|---|
 | Framework | Next.js 15 (App Router) | Full-stack, Vercel-native |
-| LLM | Google Gemini 1.5 Flash | Free tier, long context |
-| Data Source | Monday.com GraphQL API | Read-only, stable |
+| LLM | Google Gemini 3.5 Flash | Free tier, long context, streaming |
+| Data Source | Monday.com GraphQL API | Read-only, stable, live |
 | UI | Vanilla CSS + ReactMarkdown | Premium control, no bloat |
 | Deployment | Vercel | One-click, free |
+
+## Known Limitations
+
+| Limitation | Detail |
+|---|---|
+| **Date filtering** | Queries like "this quarter" trigger a clarifying question. After you choose a period (Q1 / Q2 / 6 months / FY2026), data is filtered by deal close date or work-order start date. Records with no date are excluded from filtered views. |
+| **Missing deal values** | 52% of deals in the Monday.com board have no recorded deal value. These are counted but contribute ₹0 to monetary totals. The agent communicates this caveat in every response. |
+| **Qualitative probability** | The Deals board stores probability as "High / Medium / Low" text. The agent maps these to 70% / 40% / 15% for weighted pipeline calculations and states this assumption clearly. |
+| **Cross-board join** | Won deals and work orders cannot be linked record-by-record (no shared unique ID). Cross-board questions provide aggregate insight, not row-level tracing. |
+| **Session memory** | Conversation history is kept client-side per session. Refreshing the page starts a new conversation. |
