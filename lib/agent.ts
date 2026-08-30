@@ -16,16 +16,22 @@ type DataSource = "work_orders" | "deals" | "both";
 function classifyQuery(query: string): DataSource {
   const q = query.toLowerCase();
 
+  const isExplicitWO = q.includes("work order") || q.includes("work_order") || q.includes("completed work");
+  const isExplicitDeal = q.includes("deal") || q.includes("pipeline") || q.includes("stage");
+
+  if (isExplicitWO && !isExplicitDeal) return "work_orders";
+  if (isExplicitDeal && !isExplicitWO) return "deals";
+
   const workOrderKeywords = [
-    "work order", "project", "execution", "operational", "deployed",
+    "project", "execution", "operational", "deployed",
     "flight", "pilot", "team", "task", "deliverable", "milestone",
-    "timeline", "deadline", "contract", "assignment",
+    "timeline", "deadline", "contract", "assignment", "billed",
   ];
 
   const dealKeywords = [
-    "deal", "pipeline", "sales", "revenue", "prospect", "lead",
+    "sales", "prospect", "lead",
     "win", "lost", "close", "probability", "conversion", "funnel",
-    "opportunity", "crm", "forecast", "quarter", "target",
+    "opportunity", "crm", "forecast", "target",
   ];
 
   const hasWO = workOrderKeywords.some((k) => q.includes(k));

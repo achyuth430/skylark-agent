@@ -19,26 +19,27 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const stream = await runAgent(message, history ?? []);
-
-    // Convert string stream to byte stream for Response
     const encoder = new TextEncoder();
-    const byteStream = new ReadableStream({
+    const stream = new ReadableStream({
       async start(controller) {
-        const reader = stream.getReader();
         try {
+          const agentStream = await runAgent(message, history ?? []);
+          const reader = agentStream.getReader();
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             controller.enqueue(encoder.encode(value));
           }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Internal server error";
+          controller.enqueue(encoder.encode(`\n\n⚠️ Error: ${msg}`));
         } finally {
           controller.close();
         }
       },
     });
 
-    return new Response(byteStream, {
+    return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Transfer-Encoding": "chunked",
